@@ -1,15 +1,23 @@
-// @ts-nocheck
-import { track, trigger } from './effect'
+import { ReactiveFlags, mutableHandlers, readonlyHandlers } from './baseHandlers'
+
 export function reactive(target) {
-	return new Proxy(target, {
-		get(target, key, receiver) {
-			track(target, key)
-			return Reflect.get(target, key, receiver)
-		},
-		set(target, key, newValue, receiver) {
-			const result = Reflect.set(target, key, newValue, receiver)
-			trigger(target, key)
-			return result
-		},
-	})
+	return createActiveObject(target, mutableHandlers)
+}
+
+export function readonly(target) {
+	return createActiveObject(target, readonlyHandlers)
+}
+export function isReactive(value) {
+	// value不是Proxy对象 是undefined的时候 取反
+	// 兼容之前的
+	return !!value[ReactiveFlags.IS_REACTIVE]
+}
+export function isReadOnly(value) {
+	// value不是Proxy对象 是undefined的时候 取反
+	// 兼容之前的
+	return !!value[ReactiveFlags.IS_READONLY]
+}
+
+function createActiveObject(target, baseHandlers) {
+	return new Proxy(target, baseHandlers)
 }
