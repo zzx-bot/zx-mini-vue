@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en" style="width: 100%; height: 100%">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Document</title>
+	</head>
+	<body style="width: 100%; height: 100%">
+		<div id="app"></div>
+	</body>
+	<script>
+		let targetMaps = new Map()
+
+		function reactive(target) {
+			return new Proxy(target, {
+				get(target, key, receiver) {
+					console.log(key)
+					let dep = getDep(target, key)
+					dep.depend()
+					return Reflect.get(target, key, receiver)
+				},
+				set(target, key, newValue, receiver) {
+					console.log(key)
+					let dep = getDep(target, key)
+					const result = Reflect.set(target, key, newValue, receiver)
+					dep.notice()
+					return result
+				},
+			})
+		}
+		function getDep(target, key) {
+			let depsMap = targetMaps.get(target)
+			if (!depsMap) {
+				depsMap = new Map()
+				targetMaps.set(target, depsMap)
+			}
+			let dep = depsMap.get(key)
+			if (!dep) {
+				dep = ref()
+				depsMap.set(key, dep)
+			}
+
+			return dep
+		}
+
+		// @ts-nocheck
+		let curEffect
+		function ref(value) {
+			return new Ref(value)
+		}
+		class Ref {
+			_value
+			effectList = []
+			constructor(value) {
+				this._value = value
+			}
+
+			get value() {
+				console.log('get')
+				this.depend()
+				return this._value
+			}
+
+			set value(v) {
+				console.log('set')
+				this._value = v
+				this.notice()
+			}
+
+			depend() {
+				if (curEffect) {
+					this.effectList.push(curEffect)
+					curEffect = null
+				}
+			}
+
+			notice() {
+				this.effectList.forEach(effect => {
+					effect()
+				})
+			}
+		}
+
+		function effectWatch(effect) {
+			curEffect = effect
+			effect()
+		}
+
+		const App = {
+			render(context) {
+				const div = document.createElement('div')
+				div.innerText = context.state.count
+				window.ddd = ['div', 'span']
+				return h('div', { id: 'div' + context.state.count, class: 'dddd' }, String(context.state.count))
+			},
+			append(e) {},
+			setup() {
+				const state = reactive({
+					count: 0,
+				})
+
+				window.state = state
+				return { state }
+			},
+		}
+
+		function createApp(rootComponent) {
+			return {
+				mount(rootContainer) {
+					const context = rootComponent.setup()
+					let preSubTree = null
+					let isMount = true
+					effectWatch(() => {
+						// 清空内容
+						const subTree = rootComponent.render(context)
+						if (isMount) {
+							// init
+							mountElement(subTree, rootContainer)
+							// rootContainer.append(element)
+							isMount = false
+							preSubTree = subTree
+						} else {
+							// update
+							diff(preSubTree, subTree)
+							preSubTree = subTree
+						}
+
+						console.log(preSubTree)
+						console.log(document.querySelector('#app'))
+					})
+				},
+			}
+		}
+		createApp(App).mount(document.querySelector('#app'))
+
+		function h(tag, props, children) {
+			return {
+				tag,
+				props,
+				children,
+			}
+		}
+
+		function mountElement(vnode, container) {
+			const { tag, props, children } = vnode
+			// tag
+			const el = (vnode.el = document.createElement(tag))
+			// props
+			if (props) {
+				for (const key in props) {
+					if (Object.hasOwnProperty.call(props, key)) {
+						const val = props[key]
+						el.setAttribute(key, val)
+					}
+				}
+			}
+
+			// children
+
+			if (typeof children === 'string' || typeof children === 'number') {
+				const textNode = document.createTextNode(children)
+				el.append(textNode)
+			} else if (Array.isArray(children)) {
+				children.forEach(item => {
+					mountElement(item, el)
+				})
+			}
+
+			container.append(el)
+		}
+		function diff(n1, n2) {
+			const el = (n2.el = n1.el)
+			// tag
+			if (n1.tag !== n2.tag) {
+				n1.el.replaceWith(document.createElement(n2.tag))
+			}
+
+			// prop
+			const { props: newProps } = n2
+			const { props: oldProps } = n1
+			if (newProps && oldProps) {
+				Object.keys(newProps).forEach(key => {
+					const newVal = newProps[key]
+					const oldVal = oldProps[key]
+					if (newVal !== oldVal) {
+						el.setAttribute(key, newVal)
+					}
+				})
+			}
+
+			if (oldProps) {
+				Object.keys(oldProps).forEach(key => {
+					if (!newProps[key]) {
+						el.removeAttribute(key)
+					}
+				})
+			}
+
+			// children
+			const { children: newChildren } = n2
+			const { children: oldChildren } = n1
+
+			if (typeof newChildren === 'string') {
+				if (typeof oldChildren === 'string') {
+					el.innerText = newChildren
+					console.log('el.innerText', el.innerText)
+				} else if (Array.isArray(oldChildren)) {
+					el.innerText = newChildren
+				}
+			} else if (Array.isArray(newChildren)) {
+				if (typeof oldChildren === 'string') {
+					el.innerText = ''
+					mountElement(newChildren, el)
+				} else if (Array.isArray(newChildren)) {
+					let minLength = Math.min(newChildren.length, oldChildren.length)
+					for (let i = 0; i < minLength; i++) {
+						const newNode = newChildren[i]
+						const oldNode = oldChildren[i]
+
+						diff(oldNode, newNode)
+					}
+
+					if (newChildren.length > minLength) {
+						for (let i = minLength; i < newChildren.length; i++) {
+							const newNode = newChildren[i]
+							mountElement(newChildren, el)
+						}
+					}
+
+					if (oldChildren.length > minLength) {
+						for (let i = minLength; i < oldChildren.length; i++) {
+							const oldNode = oldChildren[i]
+							oldNode.el.parent.removeChild(oldNode.el)
+						}
+					}
+				}
+			}
+			console.log(n2.el)
+		}
+	</script>
+	<style>
+		.dddd {
+			background-color: blueviolet;
+		}
+	</style>
+</html>
