@@ -53,16 +53,25 @@ export function effect(fn: Function, option: effectOption = {}) {
 }
 // 依赖搜集
 export function track(target, key) {
+	trackEffect(getDep(target, key))
+}
+export function trackEffect(dep, deleteEffect = true) {
+	// 依赖不存在时返回
 	if (!activeEffect) return
-
-	let dep = getDep(target, key)
-	dep.add(activeEffect)
-	activeEffect.deps.push(dep)
-	activeEffect = null
+	if (!dep.has(activeEffect)) {
+		dep.add(activeEffect)
+		activeEffect.deps.push(dep)
+		// 依赖收集后置null
+		if (deleteEffect) activeEffect = null
+	}
 }
 // 触发依赖
 export function trigger(target, key) {
-	let dep = getDep(target, key)
+	triggerEffect(getDep(target, key))
+}
+
+export function triggerEffect(dep) {
+	if (!dep) return
 	for (const effect of dep) {
 		if (effect.scheduler) effect.scheduler()
 		else effect.run()
@@ -77,7 +86,7 @@ function getDep(target, key) {
 	}
 	let dep = depsMap.get(key)
 	if (!dep) {
-		dep = new Set<ReactiveEffect>()
+		dep = new Set()
 		depsMap.set(key, dep)
 	}
 	return dep

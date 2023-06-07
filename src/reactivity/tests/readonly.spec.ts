@@ -1,4 +1,4 @@
-import { isReadOnly, readonly } from '../reactive'
+import { isProxy, isReadOnly, readonly } from '../reactive'
 
 describe('readonly', () => {
 	it('happy path', () => {
@@ -28,5 +28,21 @@ describe('readonly', () => {
 		expect(isReadOnly(wrapped)).toBe(true)
 		expect(isReadOnly(original)).toBe(false)
 		expect(wrapped.foo).toBe(1)
+	})
+	it('nest reactive', () => {
+		const original = {
+			nested: {
+				foo: 1,
+			},
+			array: [{ bar: 2 }],
+		}
+		const observed = readonly(original)
+
+		expect(isReadOnly(observed)).toBe(true)
+		expect(isReadOnly(observed.nested)).toBe(true)
+		expect(isProxy(observed.nested)).toBe(true)
+		expect(isReadOnly(observed.nested.foo)).toBe(false)
+		expect(isReadOnly(observed.array)).toBe(true)
+		expect(isReadOnly(observed.array[0])).toBe(true)
 	})
 })
