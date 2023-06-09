@@ -6,19 +6,19 @@ interface effectOption {
 	scheduler?: Function
 	onStop?: Function
 }
-class ReactiveEffect {
+export class ReactiveEffect {
 	_fn: Function
 	onStop: Function | undefined
 	scheduler: Function | undefined
 	deps: Set<ReactiveEffect>[] = []
 	active = true
 
-	constructor(fn: Function, option?: effectOption) {
+	constructor(fn: Function, scheduler?: Function, onStop?: Function) {
 		this._fn = fn
-		if (option) {
-			this.scheduler = option.scheduler
-			this.onStop = option.onStop
-		}
+		this.scheduler = scheduler
+		this.onStop = onStop
+		// 写在这里不然  在computed的时候 无法收集到effect
+		activeEffect = this
 	}
 	run() {
 		return this._fn()
@@ -44,8 +44,8 @@ let activeEffect
 
 // 新建一个依赖
 export function effect(fn: Function, option: effectOption = {}) {
-	const _effect = new ReactiveEffect(fn, option)
-	activeEffect = _effect
+	const _effect = new ReactiveEffect(fn, option.scheduler, option.onStop)
+
 	_effect.run()
 	const runner: any = _effect.run.bind(_effect)
 	runner.effect = _effect

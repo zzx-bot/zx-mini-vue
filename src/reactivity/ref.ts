@@ -3,7 +3,7 @@ import { mutableHandlers } from './baseHandlers'
 import { trackEffect, triggerEffect } from './effect'
 import { reactive } from './reactive'
 
-class RefImpl {
+export class RefImpl {
 	_value: any
 	dep: any
 	_rawValue: any
